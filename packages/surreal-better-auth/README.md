@@ -50,7 +50,7 @@ pnpm add @imran3113/surreal-better-auth surrealdb better-auth
 
 ```ts
 // lib/db.ts
-import Surreal from "surrealdb";
+import { Surreal } from "surrealdb";
 
 const db = new Surreal();
 await db.connect("ws://localhost:8000");
