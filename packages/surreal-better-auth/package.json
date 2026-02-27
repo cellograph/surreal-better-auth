@@ -1,12 +1,10 @@
 {
-  "name": "surreal-better-auth",
+  "name": "@cellograph/surreal-better-auth",
   "description": "SurrealDB adapter for Better Auth",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "author": {
-    "name": "Oskar Gmerek",
-    "url": "https://oskargmerek.com",
-    "email": "oskar.gmerek@neetrio.com",
-    "github": "https://github.com/oskar-gmerek"
+    "name": "cellograph",
+    "github": "https://github.com/cellograph"
   },
   "keywords": [
     "adapter",
@@ -25,7 +23,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/oskar-gmerek/surreal-better-auth.git"
+    "url": "https://github.com/cellograph/surreal-better-auth.git"
   },
   "license": "MIT",
   "main": "./dist/index.cjs",
