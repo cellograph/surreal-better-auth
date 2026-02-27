@@ -3,7 +3,7 @@
  * Handles ID conversion, data transformation, and schema mapping.
  */
 
-import { decodeCbor, PreparedQuery, RecordId, type Fill, Gap } from "surrealdb";
+import { BoundQuery, RecordId } from "surrealdb";
 import type { Where } from "better-auth/types";
 import { logger } from "better-auth";
 import type {
@@ -53,9 +53,7 @@ export function toRecordId(model: string, id: any): RecordId {
 export function recordIdsToStrings<T>(value: T): T {
   if (value === null || value === undefined) return value;
   if (value instanceof RecordId)
-    return (value.id
-      ? `${(value as RecordId).tb}:${(value as RecordId).id}`
-      : value.toString()) as unknown as T;
+    return value.toString() as unknown as T;
   if (value instanceof Date) {
     return value;
   }
@@ -116,8 +114,7 @@ export function logQuery(
   config: SurrealDBAdapterConfig | undefined,
   debugLog: (...args: any[]) => void,
   method: AdapterMethod,
-  query: PreparedQuery,
-  fills: Fill<any>[],
+  query: BoundQuery,
 ): void {
   if (!config?.debugLogs) return;
   if (
@@ -151,8 +148,8 @@ export function logQuery(
     }
   }
 
-  const encoded = query.build(fills);
-  const [queryTemplate, params] = decodeCbor(encoded);
+  const queryTemplate = query.query;
+  const params = query.bindings;
   let readableQuery = queryTemplate;
 
   // Replace parameters with actual values
@@ -192,7 +189,7 @@ export function logQuery(
     const transationId = `${colors.fg.magenta}###`;
     const stepString = `${colors.bg.black}${colors.fg.yellow}[0/#]${colors.reset}`;
     const methodString = `${colors.bright}${method}`;
-    const preparedString = `${colors.dim}(PreparedQuery)${colors.reset}:`;
+    const preparedString = `${colors.dim}(BoundQuery)${colors.reset}`;
     const PADDING = "  ";
     let formattedString = `${colors.bg.obsidian_violet}`;
     formattedString += PADDING;
@@ -519,8 +516,7 @@ export function buildQuerySuffix(
  * Builds WHERE clause with proper parameter binding and RecordId conversion.
  */
 export function buildWhereClauseParts(
-  bindings: Record<string, Gap<any>>,
-  fills: Fill<any>[],
+  bindings: Record<string, unknown>,
   { where, model }: { where: Where[]; model: string },
   getModelName: (model: string) => string,
   getFieldName: (opts: { model: string; field: string }) => string,
@@ -545,8 +541,6 @@ export function buildWhereClauseParts(
     const fieldName = getFieldName({ model, field: internalField });
 
     const param = `where_${idx}`;
-    const gap = new Gap<any>();
-    bindings[param] = gap;
     let conditionStr = "";
 
     if (operator === "in") {
@@ -564,7 +558,7 @@ export function buildWhereClauseParts(
           );
         }
       }
-      fills.push(gap.fill(finalVals));
+      bindings[param] = finalVals;
     } else if (operator === "not_in") {
       conditionStr = `${fieldName} NOT IN $${param}`;
       const vals = Array.isArray(value) ? value : [value];
@@ -580,19 +574,17 @@ export function buildWhereClauseParts(
           );
         }
       }
-      fills.push(gap.fill(finalVals));
+      bindings[param] = finalVals;
     } else if (operator in COMPARISON_OPERATORS) {
       conditionStr = `${fieldName} ${COMPARISON_OPERATORS[operator]} $${param}`;
       if (internalField === "id") {
-        const recordId = toRecordId(tableName, value);
-        fills.push(gap.fill(recordId));
+        bindings[param] = toRecordId(tableName, value);
       } else {
         const referencedModelName = getReferencedModelFn(tableName, fieldName);
         if (referencedModelName && typeof value === "string") {
-          const recordId = toRecordId(referencedModelName, value);
-          fills.push(gap.fill(recordId));
+          bindings[param] = toRecordId(referencedModelName, value);
         } else {
-          fills.push(gap.fill(value));
+          bindings[param] = value;
         }
       }
     } else if (operator in STRING_OPERATORS) {
@@ -601,11 +593,11 @@ export function buildWhereClauseParts(
       } else {
         conditionStr = `string::${STRING_OPERATORS[operator]}(${fieldName}, $${param})`;
       }
-      fills.push(gap.fill(value));
+      bindings[param] = value;
     } else {
       // Fallback for unknown operators - treat as generic value comparison
       conditionStr = `${fieldName} = $${param}`;
-      fills.push(gap.fill(value));
+      bindings[param] = value;
 
       ERROR_HANDLERS.unsupportedOperator(operator, config);
     }
@@ -629,7 +621,7 @@ export function generateCreateQuery(
   customId?: string,
   selectFields?: string,
   generateId?: () => string,
-): { query: PreparedQuery; fills: Fill<any>[] } {
+): { query: BoundQuery } {
   let targetClause: string;
   const providedId = customId ?? (generateId ? generateId() : null);
 
@@ -638,22 +630,22 @@ export function generateCreateQuery(
   } else {
     switch (config?.idGenerator) {
       case "surreal.ULID":
-        targetClause = `type::thing('${tableName}', rand::ulid())`;
+        targetClause = `type::record('${tableName}', rand::ulid())`;
         break;
       case "surreal.UUID":
-        targetClause = `type::thing('${tableName}', rand::uuid())`;
+        targetClause = `type::record('${tableName}', rand::uuid())`;
         break;
       case "surreal.UUIDv4":
-        targetClause = `type::thing('${tableName}', rand::uuid::v4())`;
+        targetClause = `type::record('${tableName}', rand::uuid::v4())`;
         break;
       case "surreal.UUIDv7":
-        targetClause = `type::thing('${tableName}', rand::uuid::v7())`;
+        targetClause = `type::record('${tableName}', rand::uuid::v7())`;
         break;
       case "surreal.guid":
-        targetClause = `type::thing('${tableName}', rand::guid())`;
+        targetClause = `type::record('${tableName}', rand::guid())`;
         break;
       default: // Includes `sdk.*` and undefined
-        targetClause = `type::table('${tableName}')`;
+        targetClause = `type::record('${tableName}')`;
         break;
     }
   }
@@ -661,12 +653,7 @@ export function generateCreateQuery(
   const suffix = buildQuerySuffix({ returnFields: selectFields });
   const queryString = `CREATE ${targetClause} CONTENT $content${suffix}`;
 
-  const bindings = { content: new Gap<any>() };
-  const fills = [bindings.content.fill(content)];
-  const preparedQuery = new PreparedQuery(queryString, bindings);
-
   return {
-    query: preparedQuery,
-    fills,
+    query: new BoundQuery(queryString, { content }),
   };
 }

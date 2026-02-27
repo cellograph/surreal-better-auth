@@ -7,28 +7,25 @@ describe("SurrealDB adapter test", async () => {
   const db = new Surreal();
 
   beforeAll(async () => {
-    await db.connect("ws://127.0.0.1:8000/rpc");
-    await db.signin({ username: "root", password: "root" });
+    await db.connect("ws://127.0.0.1:7010/rpc");
+    await db.signin({ username: "cellograph", password: "SeeYouSoon_3113" });
     await db.use({ namespace: "test", database: "better_auth_test" });
 
+    // Define schema first (OVERWRITE ensures idempotent re-runs)
     await db.query(`
-      BEGIN TRANSACTION;
-      DELETE account; DELETE user; DELETE sessions; DELETE verification;
-
 -- ╔════════════════════════════════════════════════════════════════════════╗
 -- ║  TABLE: user                                                           ║
 -- ╚════════════════════════════════════════════════════════════════════════╝
 DEFINE TABLE OVERWRITE user SCHEMAFULL;
 
-DEFINE FIELD OVERWRITE id ON TABLE user TYPE record<user>;
-DEFINE FIELD OVERWRITE name ON TABLE user TYPE string; 
+DEFINE FIELD OVERWRITE name ON TABLE user TYPE string;
 DEFINE FIELD OVERWRITE email_address ON TABLE user TYPE string;
 DEFINE FIELD OVERWRITE emailVerified ON TABLE user TYPE bool;
 DEFINE FIELD OVERWRITE image ON TABLE user TYPE option<string>;
 DEFINE FIELD OVERWRITE createdAt ON TABLE user TYPE datetime;
-DEFINE FIELD OVERWRITE updatedAt ON TABLE user TYPE datetime; 
+DEFINE FIELD OVERWRITE updatedAt ON TABLE user TYPE datetime;
+DEFINE FIELD OVERWRITE test ON TABLE user TYPE option<string>;
 
-DEFINE INDEX OVERWRITE idx_user_id ON user COLUMNS id UNIQUE;
 DEFINE INDEX OVERWRITE idx_user_email ON user COLUMNS email_address UNIQUE;
 
 -- ╔════════════════════════════════════════════════════════════════════════╗
@@ -36,7 +33,6 @@ DEFINE INDEX OVERWRITE idx_user_email ON user COLUMNS email_address UNIQUE;
 -- ╚════════════════════════════════════════════════════════════════════════╝
 DEFINE TABLE OVERWRITE sessions SCHEMAFULL;
 
-DEFINE FIELD OVERWRITE id ON TABLE sessions TYPE record<sessions>;
 DEFINE FIELD OVERWRITE expiresAt ON TABLE sessions TYPE datetime;
 DEFINE FIELD OVERWRITE token ON TABLE sessions TYPE string;
 DEFINE FIELD OVERWRITE createdAt ON TABLE sessions TYPE datetime;
@@ -45,11 +41,12 @@ DEFINE FIELD OVERWRITE ipAddress ON TABLE sessions TYPE option<string>;
 DEFINE FIELD OVERWRITE userAgent ON TABLE sessions TYPE option<string>;
 DEFINE FIELD OVERWRITE userId ON TABLE sessions TYPE record<user>;
 
-DEFINE INDEX OVERWRITE idx_sessions_id ON sessions COLUMNS id UNIQUE;
 DEFINE INDEX OVERWRITE idx_sessions_token ON sessions COLUMNS token UNIQUE;
 DEFINE INDEX OVERWRITE idx_sessions_userId ON sessions COLUMNS userId;
-COMMIT TRANSACTION;
 `);
+
+    // Clean up any leftover data from previous runs
+    await db.query(`DELETE user; DELETE sessions;`);
   });
 
   afterAll(async () => {
@@ -110,6 +107,6 @@ COMMIT TRANSACTION;
         updatedAt: new Date(),
       },
     });
-    expect(res.id).toBe("user:mocked-id");
+    expect(res.id).toBe("user:⟨mocked-id⟩");
   });
 });

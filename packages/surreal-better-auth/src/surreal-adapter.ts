@@ -1,10 +1,8 @@
 import {
   type RecordId,
-  PreparedQuery,
+  BoundQuery,
   Uuid,
-  Gap,
   type Surreal,
-  type Fill,
 } from "surrealdb";
 import type { Where } from "better-auth/types";
 import { createAdapter } from "better-auth/adapters";
@@ -120,13 +118,11 @@ export const surrealdbAdapter = (
         buildQuerySuffix(options, getFieldName);
 
       const buildWhereClausePartsFn = (
-        bindings: Record<string, Gap<any>>,
-        fills: Fill<any>[],
+        bindings: Record<string, unknown>,
         { where, model }: { where: Where[]; model: string },
       ) =>
         buildWhereClauseParts(
           bindings,
-          fills,
           { where, model },
           getModelName,
           getFieldName,
@@ -174,17 +170,15 @@ export const surrealdbAdapter = (
 
           if (remainingWhere.length === 0) {
             // Pure direct record operation
-            const bindings: Record<string, Gap<any>> = {};
-            const fills: Fill<any>[] = [];
+            const bindings: Record<string, unknown> = {};
 
             if (content !== undefined) {
-              bindings.content = new Gap<any>();
-              fills.push(bindings.content.fill(content));
+              bindings.content = content;
             }
 
-            const query = new PreparedQuery(directQuery + suffix, bindings);
-            logQuery(config, debugLog, method, query, fills);
-            const result = await db.query<[any[]]>(query, fills);
+            const query = new BoundQuery(directQuery + suffix, bindings);
+            logQuery(config, debugLog, method, query);
+            const result = await db.query<[any[]]>(query).collect();
 
             if (returnCount) {
               return result[0]?.length || 0;
@@ -193,23 +187,21 @@ export const surrealdbAdapter = (
             return processResult(singleRecord ? result[0] : result[0]);
           }
           // Direct record operation with additional WHERE conditions
-          const bindings: Record<string, Gap<any>> = {};
-          const fills: Fill<any>[] = [];
+          const bindings: Record<string, unknown> = {};
 
           if (content !== undefined) {
-            bindings.content = new Gap<any>();
-            fills.push(bindings.content.fill(content));
+            bindings.content = content;
           }
 
-          const whereStr = buildWhereClausePartsFn(bindings, fills, {
+          const whereStr = buildWhereClausePartsFn(bindings, {
             where: remainingWhere,
             model,
           });
           const queryString = directQuery + whereStr + suffix;
 
-          const query = new PreparedQuery(queryString, bindings);
-          logQuery(config, debugLog, method, query, fills);
-          const result = await db.query<[any[]]>(query, fills);
+          const query = new BoundQuery(queryString, bindings);
+          logQuery(config, debugLog, method, query);
+          const result = await db.query<[any[]]>(query).collect();
 
           if (returnCount) {
             return result[0]?.length || 0;
@@ -219,23 +211,21 @@ export const surrealdbAdapter = (
         }
 
         // Fallback to standard WHERE clause query
-        const bindings: Record<string, Gap<any>> = {};
-        const fills: Fill<any>[] = [];
+        const bindings: Record<string, unknown> = {};
 
         if (content !== undefined) {
-          bindings.content = new Gap<any>();
-          fills.push(bindings.content.fill(content));
+          bindings.content = content;
         }
 
-        const whereStr = buildWhereClausePartsFn(bindings, fills, {
+        const whereStr = buildWhereClausePartsFn(bindings, {
           where: where || [],
           model,
         });
         const queryString = baseQuery + whereStr + suffix;
 
-        const query = new PreparedQuery(queryString, bindings);
-        logQuery(config, debugLog, method, query, fills);
-        const result = await db.query<[any[]]>(query, fills);
+        const query = new BoundQuery(queryString, bindings);
+        logQuery(config, debugLog, method, query);
+        const result = await db.query<[any[]]>(query).collect();
 
         if (returnCount) {
           return result[0]?.length || 0;
@@ -276,16 +266,16 @@ export const surrealdbAdapter = (
           }
 
           // Generate query
-          const { query, fills } = generateCreateQueryFn(
+          const { query } = generateCreateQueryFn(
             tableName,
             content,
             customId,
             selectFields,
           );
 
-          logQuery(config, debugLog, "create", query, fills);
+          logQuery(config, debugLog, "create", query);
 
-          const result = await db.query<[any[]]>(query, fills);
+          const result = await db.query<[any[]]>(query).collect();
           return recordIdsToStrings(result[0][0]);
         },
 

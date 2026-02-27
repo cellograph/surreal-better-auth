@@ -133,10 +133,6 @@ export function generateSchema(
 
     schemaLines.push(...buildTableBox(`TABLE: ${tableName}`));
     schemaLines.push(`DEFINE TABLE OVERWRITE ${tableName} SCHEMAFULL;`);
-    schemaLines.push("");
-    schemaLines.push(
-      `DEFINE FIELD OVERWRITE id ON TABLE ${tableName} TYPE record<${tableName}>;`,
-    );
 
     // Generate field definitions
     for (const [internalFieldName, field] of Object.entries(
@@ -159,10 +155,6 @@ export function generateSchema(
     }
 
     schemaLines.push("");
-    schemaLines.push(
-      `DEFINE INDEX OVERWRITE idx_${tableName}_id ON ${tableName} COLUMNS id UNIQUE;`,
-    );
-
     // Generate indexes for specific fields
     for (const [internalFieldName, field] of Object.entries(
       (tableDef as any).fields,
